@@ -1,4 +1,7 @@
 const isFunction = obj => typeof obj === "function";
+const isObject = obj => typeof obj === "object" && obj !== null;
+const isThenable = obj => (isFunction(obj) || isObject(obj)) && "then" in obj;
+const isPromise = promise => promise instanceof MyPromise;
 
 const PENDING = "pending";
 const FULFILLED = "fulfilled";
@@ -9,16 +12,29 @@ function MyPromise(callbackFunc) {
   this.result = null;
   this.callbacks = [];
 
+  let onFulfilled = value => transition(this, FULFILLED, value);
+  let onRejected = reason => transition(this, REJECTED, reason);
+
+  const resolveAbnormalValue = value => {
+    if (isPromise(value)) {
+      return value.then(onFulfilled, onRejected);
+    }
+    if (isThenable(value)) {
+      return new MyPromise(() => value.then(onFulfilled, onRejected));
+    }
+    onFulfilled(value);
+  };
+
   let ignore = false;
   const resolve = value => {
     if (ignore) return;
     ignore = true;
-    transition(this, FULFILLED, value);
+    resolveAbnormalValue(value);
   };
   const reject = reason => {
     if (ignore) return;
     ignore = true;
-    transition(this, REJECTED, reason);
+    onRejected(reason);
   };
   callbackFunc(resolve, reject);
 }
